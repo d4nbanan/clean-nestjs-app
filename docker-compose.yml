@@ -1,0 +1,67 @@
+name: dokport
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: app
+    ports:
+      - "3000:3000"
+    depends_on:
+      - db
+    networks:
+      - basic_network
+    env_file:
+      - .env
+
+  db:
+    container_name: dokport_postgres
+    image: postgres
+    restart: always
+    shm_size: 128mb
+    environment:
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5434:5432"
+    networks:
+      - basic_network
+
+  redis:
+    image: redis:latest
+    container_name: dokport_redis
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_USER=${REDIS_USER}
+      - REDIS_USER_PASSWORD=${REDIS_USER_PASSWORD}
+    ports:
+      - '6379:6379'
+    networks:
+      - basic_network
+    volumes:
+      - ./redisdata:/data
+    command: >
+      sh -c "
+        mkdir -p /usr/local/etc/redis &&
+        echo 'bind 0.0.0.0' > /usr/local/etc/redis/redis.conf &&
+        echo 'requirepass $REDIS_PASSWORD' >> /usr/local/etc/redis/redis.conf &&
+        echo 'appendonly yes' >> /usr/local/etc/redis/redis.conf &&
+        echo 'appendfsync everysec' >> /usr/local/etc/redis/redis.conf &&
+        echo 'user default on nopass ~* +@all' > /usr/local/etc/redis/users.acl &&
+        echo 'user $REDIS_USER on >$REDIS_USER_PASSWORD ~* +@all' >> /usr/local/etc/redis/users.acl &&
+        exec redis-server /usr/local/etc/redis/redis.conf --aclfile /usr/local/etc/redis/users.acl
+      "
+
+volumes:
+  pgdata:
+    name: 'dokport_db_data'
+  redisdata:
+    name: 'dokport_redis_data'
+
+networks:
+  basic_network:
+    driver: bridge
